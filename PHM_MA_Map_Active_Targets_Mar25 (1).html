@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M&A Map – Active Targets</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+  }
+
+  #map-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  #map {
+    width: 100%;
+    height: 100%;
+    background: #1a1d26;
+  }
+
+  .header-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: linear-gradient(180deg, rgba(15,17,23,0.95) 0%, rgba(15,17,23,0.7) 80%, transparent 100%);
+    padding: 16px 24px 32px;
+    pointer-events: none;
+  }
+
+  .header-bar h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.5px;
+    pointer-events: auto;
+  }
+
+  .header-bar .subtitle {
+    font-size: 13px;
+    color: #8a8f9e;
+    margin-top: 2px;
+  }
+
+  .legend {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    z-index: 1000;
+    background: rgba(15,17,23,0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-width: 180px;
+  }
+
+  .legend h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #6b7084;
+    margin-bottom: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s;
+  }
+
+  .legend-item.dimmed {
+    opacity: 0.3;
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .legend-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #c8ccd5;
+    flex: 1;
+  }
+
+  .legend-count {
+    font-size: 12px;
+    color: #6b7084;
+    font-weight: 600;
+  }
+
+  .leaflet-popup-content-wrapper {
+    background: rgba(30,33,43,0.97) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+    padding: 0 !important;
+  }
+
+  .leaflet-popup-content {
+    margin: 0 !important;
+    padding: 14px 16px !important;
+  }
+
+  .leaflet-popup-tip-container { display: none; }
+
+  .popup-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+
+  .popup-region {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .leaflet-container {
+    background: rgba(30,33,43,0.95) !important;
+    color: #fff !important;
+  }
+
+  .update-badge {
+    position: absolute;
+    top: 60px;
+    right: 24px;
+    z-index: 1000;
+    background: rgba(15,17,23,0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 11px;
+    color: #6b7084;
+    pointer-events: none;
+  }
+
+  .target-count-badge {
+    position: absolute;
+    top: 60px;
+    left: 24px;
+    z-index: 1000;
+    background: rgba(15,17,23,0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 11px;
+    color: #6b7084;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="map-container">
+  <div class="header-bar">
+    <h1>M&A Map &mdash; Active Targets</h1>
+    <div class="subtitle">Performance Home Medical &middot; Regional View</div>
+  </div>
+  <div class="update-badge">Updated Mar 25, 2026</div>
+  <div class="target-count-badge">40 Active Targets</div>
+  <div id="map"></div>
+  <div class="legend" id="legend">
+    <h3>Regions</h3>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ── Region config ──
+const REGIONS = {
+  'NW Region': { color: '#3b82f6', label: 'NW Region' },
+  'SW Region': { color: '#f59e0b', label: 'SW Region' },
+  'NE Region': { color: '#10b981', label: 'NE Region' },
+  'SE Region': { color: '#ef4444', label: 'SE Region' },
+  'N Region':  { color: '#a855f7', label: 'N Region' },
+  'S Region':  { color: '#f97316', label: 'S Region' },
+  'New England': { color: '#06b6d4', label: 'New England' },
+};
+
+// ── Location data ──
+// Each entry has: name (display), lat, lng
+const locations = {
+  'NW Region': [
+    // Owens (CA)
+    { name: 'Owens - Redding', lat: 40.5708, lng: -122.4016 },
+    { name: 'Owens - Chico', lat: 39.7123, lng: -121.7907 },
+    { name: 'Owens - Susanville', lat: 40.4115, lng: -120.6380 },
+    { name: 'Owens - Yuba City', lat: 39.1411, lng: -121.6510 },
+    { name: 'Owens - Reno', lat: 39.4882, lng: -119.7588 },
+    // PHM Existing WA locations
+    { name: 'PHM - Kent', lat: 47.3815, lng: -122.2374 },
+    { name: "PHM - Coeur d'Alene", lat: 47.6735, lng: -116.7812 },
+    { name: 'PHM - Corvallis', lat: 44.5646, lng: -123.2620 },
+    { name: 'PHM - Gresham', lat: 45.5045, lng: -122.4357 },
+    { name: 'PHM - Salem', lat: 44.9362, lng: -123.0407 },
+    { name: 'PHM - Springfield', lat: 44.0462, lng: -123.0220 },
+    { name: 'PHM - Bellingham', lat: 48.7519, lng: -122.4787 },
+    { name: 'PHM - Enumclaw', lat: 47.2043, lng: -121.9915 },
+    { name: 'PHM - Everett', lat: 47.9782, lng: -122.2074 },
+    { name: 'PHM - Kennewick', lat: 46.2087, lng: -119.1199 },
+    { name: 'PHM - Lynnwood', lat: 47.8209, lng: -122.3151 },
+    { name: 'PHM - Mount Vernon', lat: 48.4201, lng: -122.3375 },
+    { name: 'PHM - Olympia', lat: 47.0452, lng: -122.8954 },
+    { name: 'PHM - Puyallup', lat: 47.1854, lng: -122.2929 },
+    { name: 'PHM - Redmond', lat: 47.6740, lng: -122.1215 },
+    { name: 'PHM - Seattle', lat: 47.6061, lng: -122.3328 },
+    { name: 'PHM - Sequim', lat: 48.0795, lng: -123.1018 },
+    { name: 'PHM - Spokane', lat: 47.6580, lng: -117.4235 },
+    { name: 'PHM - Tacoma', lat: 47.2551, lng: -122.4420 },
+    { name: 'PHM - Vancouver', lat: 45.6280, lng: -122.6739 },
+    // Impakt Medical (NorCal)
+    { name: 'Impakt Medical - Pleasanton', lat: 37.6785, lng: -121.8753 },
+    { name: 'Impakt Medical - Los Gatos', lat: 37.2631, lng: -121.9633 },
+    { name: 'Impakt Medical - Fair Oaks', lat: 38.6388, lng: -121.2775 },
+    { name: 'Impakt Medical - San Mateo', lat: 37.5521, lng: -122.3148 },
+    // Kadence Healthcare (NorCal)
+    { name: 'Kadence - Sacramento', lat: 38.6547, lng: -121.4764 },
+    { name: 'Kadence - Union City', lat: 37.6094, lng: -122.0810 },
+    // Air-Way Medical (CA/NorCal)
+    { name: 'Air-Way Medical - Bishop', lat: 37.3618, lng: -118.3883 },
+    // Howards Medical (WA)
+    { name: 'Howards Medical - Pasco', lat: 46.3200, lng: -119.9864 },
+    { name: 'Howards Medical - Yakima', lat: 46.6165, lng: -120.5301 },
+    // SleepQuest (NorCal)
+    { name: 'SleepQuest - San Francisco', lat: 37.7839, lng: -122.4320 },
+    { name: 'SleepQuest - San Carlos', lat: 37.5007, lng: -122.2457 },
+    // Providence HME (OR)
+    { name: 'Providence HME - Portland', lat: 45.5335, lng: -122.5979 },
+    { name: 'Providence HME - Salem', lat: 44.9164, lng: -123.0271 },
+    // Olympia Multi Specialty Clinic (WA)
+    { name: 'Olympia Multi Specialty Clinic', lat: 47.0454, lng: -122.9518 },
+    // Americare Respiratory (CA - SoCal / OC)
+    { name: 'Americare Respiratory - Lake Forest', lat: 33.6884, lng: -117.8282 },
+  ],
+  'SW Region': [
+    // Impakt Medical (SoCal)
+    { name: 'Impakt Medical - Santa Cruz', lat: 36.9806, lng: -122.0036 },
+    // Kadence (SoCal)
+    { name: 'Kadence - Fresno', lat: 36.7789, lng: -119.6909 },
+    { name: 'Kadence - Cypress', lat: 33.8062, lng: -118.0363 },
+    { name: 'Kadence - Los Angeles', lat: 34.0411, lng: -118.4290 },
+    { name: 'Kadence - Riverside', lat: 33.9151, lng: -117.4378 },
+    { name: 'Kadence - San Diego', lat: 32.8894, lng: -117.1603 },
+    // Wallace (CA)
+    { name: 'Wallace - San Luis Obispo', lat: 35.6247, lng: -120.6927 },
+    { name: 'Wallace - Paso Robles', lat: 35.6295, lng: -120.6941 },
+    // High Desert Medical (CA)
+    { name: 'High Desert - Fresno', lat: 36.8463, lng: -119.7984 },
+    { name: 'High Desert - Ridgecrest', lat: 35.6231, lng: -117.6683 },
+    // HME Specialists (NM/AZ)
+    { name: 'HME Specialists - Prescott Valley', lat: 34.6263, lng: -112.3082 },
+    // Pulmonary Solutions (CA - SoCal)
+    { name: 'Pulmonary Solutions - West Los Angeles', lat: 34.0195, lng: -118.4912 },
+  ],
+  'NE Region': [
+    // PM Medical (PA)
+    { name: 'PM Medical Products', lat: 41.2250, lng: -75.9363 },
+    // Illinois Sleep Provider (IL)
+    { name: 'Illinois Sleep Provider', lat: 41.8166, lng: -87.8396 },
+    // Hayat Home Medical (IL)
+    { name: 'Hayat Home Medical Equipment', lat: 41.7209, lng: -87.7098 },
+    // Life DME (IN - same owners as Hayat)
+    { name: 'Life DME - Lowell', lat: 41.2939, lng: -87.4317 },
+    // Life Tech / Respire (IL)
+    { name: 'Life Tech (Respire) - Niles', lat: 42.0197, lng: -87.7978 },
+    // Pride Medical Equipment (IL)
+    { name: 'Pride Medical Equipment - Bridgeview', lat: 41.7442, lng: -87.8048 },
+    // Maple Leaf Medical Services (IL)
+    { name: 'Maple Leaf Medical - Geneseo', lat: 41.4478, lng: -90.1526 },
+    // Genesis Respiratory (OH/KY)
+    { name: 'Genesis - Louisa KY', lat: 38.1143, lng: -82.6041 },
+    { name: 'Genesis - Lancaster OH', lat: 39.7397, lng: -82.6375 },
+    { name: 'Genesis - Maysville KY', lat: 38.6264, lng: -83.7968 },
+    { name: 'Genesis - Georgetown KY', lat: 38.8633, lng: -83.8867 },
+    { name: 'Genesis - Ashland KY', lat: 38.4826, lng: -82.6480 },
+    { name: 'Genesis - Athens OH', lat: 39.3322, lng: -82.0924 },
+    { name: 'Genesis - Hillsboro OH', lat: 39.2031, lng: -83.6119 },
+    { name: 'Genesis - Waverly OH', lat: 39.1209, lng: -82.9941 },
+    { name: 'Genesis - Jackson OH', lat: 39.0342, lng: -82.6188 },
+    { name: 'Genesis - Ironton OH', lat: 38.5352, lng: -82.6859 },
+    { name: 'Genesis - Coral Grove OH', lat: 38.5019, lng: -82.6449 },
+    { name: 'Genesis - New Boston OH', lat: 38.7542, lng: -82.9338 },
+    { name: 'Genesis - West Union OH', lat: 38.7868, lng: -83.5561 },
+    { name: 'Genesis - Inez KY', lat: 37.8539, lng: -82.5119 },
+    { name: 'Genesis - Grayson KY', lat: 38.3470, lng: -82.9435 },
+    { name: 'Genesis - Morehead KY', lat: 38.1791, lng: -83.4405 },
+    { name: 'Genesis - Vanceburg KY', lat: 38.6016, lng: -83.3179 },
+    // Miller's Rental and Sales (OH)
+    { name: "Miller's - Akron", lat: 41.0651, lng: -81.5368 },
+    { name: "Miller's - Canton", lat: 40.7959, lng: -81.4193 },
+    { name: "Miller's - Cleveland", lat: 41.4312, lng: -81.6596 },
+    { name: "Miller's - Youngstown", lat: 41.0870, lng: -80.6753 },
+    { name: "Miller's - Columbus", lat: 40.0966, lng: -82.9696 },
+    // University Hospitals (OH)
+    { name: 'University Hospitals - Cleveland', lat: 41.5056, lng: -81.6060 },
+    // Seeley Medical (OH)
+    { name: 'Seeley Medical - Lima', lat: 40.7448, lng: -84.1052 },
+  ],
+  'SE Region': [
+    // Atlantic Respiratory Services (SC)
+    { name: 'Atlantic Respiratory - Charleston', lat: 32.7876, lng: -79.9923 },
+    { name: 'Atlantic Respiratory - Walterboro', lat: 32.9050, lng: -80.6704 },
+    // Charter Medical (MS)
+    { name: 'Charter Medical - Jackson', lat: 32.2988, lng: -90.1848 },
+    // Murphy Medical Supply (MS)
+    { name: 'Murphy Medical Supply - Hattiesburg', lat: 31.3271, lng: -89.2903 },
+    // Ophello Medical Equipment (TN)
+    { name: 'Ophello Medical Equipment - Tennessee', lat: 36.1627, lng: -86.7816 },
+    // Orange Coast Respiratory / Carolina Breathing Solutions (NC)
+    { name: 'Carolina Breathing Solutions - Charlotte', lat: 35.2271, lng: -80.8431 },
+  ],
+  'N Region': [
+    // RespirTech (MN)
+    { name: 'RespirTech - St. Paul', lat: 45.0595, lng: -93.4113 },
+    // Advanced Respiratory (MN)
+    { name: 'Advanced Respiratory Inc - Minneapolis', lat: 45.0642, lng: -93.1435 },
+    // Reliable Medical Supply (MN)
+    { name: 'Reliable Medical - Brooklyn Park', lat: 45.1094, lng: -93.3822 },
+    { name: 'Reliable Medical - Buffalo', lat: 45.1719, lng: -93.8747 },
+    { name: 'Reliable Medical - Rochester', lat: 44.0234, lng: -92.4690 },
+    { name: 'Reliable Medical - Waite Park', lat: 45.5569, lng: -94.2248 },
+    // Funk Medical & Mobility (KS)
+    { name: 'Funk Medical & Mobility - Wichita', lat: 37.6872, lng: -97.3301 },
+  ],
+  'S Region': [
+    // Monitor Medical (TX)
+    { name: 'Monitor Medical - Sugar Land', lat: 29.6367, lng: -95.6113 },
+    { name: 'Monitor Medical - Katy', lat: 29.7921, lng: -95.7237 },
+    { name: 'Monitor Medical - The Woodlands', lat: 30.1321, lng: -95.4542 },
+    { name: 'Monitor Medical - Arlington', lat: 32.6915, lng: -97.1303 },
+    { name: 'Monitor Medical - Austin', lat: 30.1853, lng: -97.8179 },
+    { name: 'Monitor Medical - Houston', lat: 29.9169, lng: -95.6104 },
+    { name: 'Monitor Medical - Pearland', lat: 29.5615, lng: -95.3803 },
+    { name: 'Monitor Medical - Plano', lat: 33.0169, lng: -96.7708 },
+    { name: 'Monitor Medical - Webster', lat: 29.5578, lng: -95.1152 },
+    // PneuCare (TX)
+    { name: 'PneuCare - Alvin', lat: 29.4238, lng: -95.2443 },
+    // Memorial Hermann Home Health (TX)
+    { name: 'Memorial Hermann Home Health - Houston', lat: 29.7808, lng: -95.5586 },
+    // Kingwood Respiratory (TX)
+    { name: 'Kingwood Respiratory - Humble', lat: 30.0380, lng: -95.2522 },
+    // A&P Quality Care Medical (TX)
+    { name: 'A&P Quality Care Medical - Texas', lat: 29.8000, lng: -95.3600 },
+    // Brite Healthcare (TX)
+    { name: 'Brite Healthcare - Houston', lat: 29.6500, lng: -95.1000 },
+    // HME Specialists (NM)
+    { name: 'HME Specialists - Albuquerque Osuna', lat: 35.1514, lng: -106.6161 },
+    { name: 'HME Specialists - Albuquerque West', lat: 35.2171, lng: -106.6780 },
+    { name: 'HME Specialists - Albuquerque HQ', lat: 35.1669, lng: -106.5988 },
+    { name: 'HME Specialists - Santa Fe', lat: 35.6336, lng: -106.0248 },
+    { name: 'HME Specialists - Farmington', lat: 36.7196, lng: -108.1634 },
+    { name: 'HME Specialists - Las Cruces', lat: 32.2849, lng: -106.7721 },
+    { name: 'HME Specialists - El Paso', lat: 31.7530, lng: -106.3276 },
+    { name: 'HME Specialists - Gallup', lat: 35.5089, lng: -108.7373 },
+    { name: 'HME Specialists - Silver City', lat: 32.7869, lng: -108.2383 },
+    { name: 'HME Specialists - Roswell', lat: 33.4090, lng: -104.5158 },
+    { name: 'HME Specialists - Clovis', lat: 34.4190, lng: -103.2252 },
+    { name: 'HME Specialists - Las Vegas NM', lat: 35.5939, lng: -105.2172 },
+    { name: 'HME Specialists - Hobbs', lat: 32.7183, lng: -103.1444 },
+  ],
+  'New England': [
+    // Home Care Specialists (MA/NH/ME)
+    { name: 'Home Care Specialists - Haverhill MA', lat: 42.7838, lng: -71.0823 },
+    { name: 'Home Care Specialists - Concord NH', lat: 43.2081, lng: -71.5376 },
+    { name: 'Home Care Specialists - South Portland ME', lat: 43.6314, lng: -70.2809 },
+  ],
+};
+
+// ── State-to-region mapping ──
+const stateRegions = {
+  'WA': 'NW Region', 'OR': 'NW Region', 'ID': 'NW Region',
+  'NV': 'SW Region', 'AZ': 'SW Region',
+  'CA': 'NW Region',
+  'PA': 'NE Region', 'OH': 'NE Region', 'KY': 'NE Region',
+  'IL': 'NE Region', 'IN': 'NE Region',
+  'FL': 'SE Region', 'SC': 'SE Region', 'NC': 'SE Region',
+  'TN': 'SE Region', 'MS': 'SE Region',
+  'MN': 'N Region', 'WI': 'N Region', 'KS': 'N Region',
+  'TX': 'S Region', 'NM': 'S Region',
+  'MA': 'New England', 'NH': 'New England', 'ME': 'New England',
+};
+
+// ── Initialize map ──
+const map = L.map('map', {
+  center: [38.5, -98],
+  zoom: 5,
+  zoomControl: false,
+  attributionControl: false,
+});
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19,
+}).addTo(map);
+
+// ── Layer groups ──
+const stateLayerGroups = {};
+const pinLayerGroups = {};
+const regionVisibility = {};
+
+Object.keys(REGIONS).forEach(r => {
+  stateLayerGroups[r] = L.layerGroup().addTo(map);
+  pinLayerGroups[r] = L.layerGroup().addTo(map);
+  regionVisibility[r] = true;
+});
+
+// ── Load US state GeoJSON and color by region ──
+fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
+  .then(r => r.json())
+  .then(geojson => {
+    geojson.features.forEach(feature => {
+      const stateName = feature.properties.name;
+      const stateAbbr = stateNameToAbbr(stateName);
+      const region = stateRegions[stateAbbr];
+
+      if (region && REGIONS[region]) {
+        const layer = L.geoJSON(feature, {
+          style: {
+            fillColor: REGIONS[region].color,
+            fillOpacity: 0.18,
+            color: REGIONS[region].color,
+            weight: 1.5,
+            opacity: 0.5,
+          }
+        });
+        stateLayerGroups[region].addLayer(layer);
+      }
+    });
+  });
+
+// ── Add pins ──
+Object.entries(locations).forEach(([region, locs]) => {
+  const cfg = REGIONS[region];
+  locs.forEach(loc => {
+    const marker = L.circleMarker([loc.lat, loc.lng], {
+      radius: 6,
+      fillColor: cfg.color,
+      fillOpacity: 0.9,
+      color: '#fff',
+      weight: 1.5,
+      opacity: 0.9,
+    });
+
+    marker.bindPopup(`
+      <div class="popup-name">${loc.name}</div>
+      <div class="popup-region" style="background:${cfg.color}22; color:${cfg.color}; border:1px solid ${cfg.color}44;">
+        ${cfg.label}
+      </div>
+    `);
+
+    pinLayerGroups[region].addLayer(marker);
+  });
+});
+
+// ── Build legend ──
+const legendEl = document.getElementById('legend');
+Object.entries(REGIONS).forEach(([key, cfg]) => {
+  const count = locations[key] ? locations[key].length : 0;
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.dataset.region = key;
+  item.innerHTML = `
+    <div class="legend-swatch" style="background:${cfg.color}"></div>
+    <span class="legend-label">${cfg.label}</span>
+    <span class="legend-count">${count}</span>
+  `;
+  item.addEventListener('click', () => toggleRegion(key, item));
+  legendEl.appendChild(item);
+});
+
+function toggleRegion(region, el) {
+  regionVisibility[region] = !regionVisibility[region];
+  if (regionVisibility[region]) {
+    map.addLayer(stateLayerGroups[region]);
+    map.addLayer(pinLayerGroups[region]);
+    el.classList.remove('dimmed');
+  } else {
+    map.removeLayer(stateLayerGroups[region]);
+    map.removeLayer(pinLayerGroups[region]);
+    el.classList.add('dimmed');
+  }
+}
+
+// ── State name → abbreviation mapping ──
+function stateNameToAbbr(name) {
+  const map = {
+    'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+    'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+    'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+    'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+    'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO',
+    'Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ',
+    'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH',
+    'Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+    'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+    'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+  };
+  return map[name] || '';
+}
+</script>
+</body>
+</html>
